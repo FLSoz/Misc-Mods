@@ -1,5 +1,7 @@
 ﻿using System;
 using UnityEngine;
+using System.IO;
+using System.Linq;
 using System.Collections.Generic;
 
 
@@ -8,7 +10,12 @@ namespace Misc_Mods
     public class GUIConfig : MonoBehaviour
     {
         GameObject GUIDisp;
-
+        
+        internal static readonly string TTSteamDir = Path.GetFullPath(Path.Combine(
+            AppDomain.CurrentDomain.GetAssemblies()
+            .Where(assembly => assembly.GetName().Name == "Assembly-CSharp").First().Location
+            .Replace("Assembly-CSharp.dll", ""), @"../../"
+        ));
 
         public void Start()
         {
@@ -103,7 +110,7 @@ namespace Misc_Mods
                     //}
                     if (GUILayout.Button("Export Player Tech Model"))
                     {
-                        string path = "_Export/Techs";
+                        string path = Path.Combine(TTSteamDir, "_Export/Techs");
                         string Total = LocalObjExporter.DoExport(Singleton.playerTank.trans);
                         if (!System.IO.Directory.Exists(path))
                         {
@@ -118,7 +125,7 @@ namespace Misc_Mods
                 {
                     if (GUILayout.Button("Export " + module.type.ToString() + " Model"))
                     {
-                        string path = "_Export/Models";
+                        string path = Path.Combine(TTSteamDir, "_Export/Models");
                         string Total = LocalObjExporter.DoExport(module.transform);
                         if (!System.IO.Directory.Exists(path))
                         {
@@ -130,7 +137,7 @@ namespace Misc_Mods
                     }
                     if (GUILayout.Button("Export Parts of Selected " + module.type.ToString()))
                     {
-                        string path = "_Export/ModelParts/" + SafeName(module.name);
+                        string path = Path.Combine(TTSteamDir, "_Export/ModelParts", SafeName(module.name));
                         if (!System.IO.Directory.Exists(path))
                             System.IO.Directory.CreateDirectory(path);
 
@@ -165,7 +172,7 @@ namespace Misc_Mods
                     }
                     if (GUILayout.Button("Export all textures"))
                     {
-                        string path = "_Export/Textures/" + SafeName(module.name);
+                        string path = Path.Combine(TTSteamDir, "_Export/Textures", SafeName(module.name));
                         if (!System.IO.Directory.Exists(path))
                             System.IO.Directory.CreateDirectory(path);
 
@@ -324,7 +331,7 @@ namespace Misc_Mods
                 {
                     if (GUILayout.Button("Export " + module.type.ToString() + " JSON"))
                     {
-                        string path = "_Export/" + module.type.ToString() + "Json";
+                        string path = Path.Combine(TTSteamDir, "_Export", module.type.ToString() + "Json");
                         BlockInfoDumper.DeepDumpClassCache.Clear();
                         BlockInfoDumper.CachedTransforms.Clear();
                         var Total = BlockInfoDumper.DeepDumpAll(module.transform, 6).ToString();
@@ -340,7 +347,7 @@ namespace Misc_Mods
                     {
                         if (GUILayout.Button("Export Prefab JSON"))
                         {
-                            string path = "_Export/BlockJson";
+                            string path = Path.Combine(TTSteamDir, "_Export/BlockJson");
                             BlockInfoDumper.DeepDumpClassCache.Clear();
                             BlockInfoDumper.CachedTransforms.Clear();
                             var Total = BlockInfoDumper.DeepDumpAll(ManSpawn.inst.GetBlockPrefab((BlockTypes)module.ItemType).transform, 6).ToString();
@@ -356,7 +363,7 @@ namespace Misc_Mods
                         var fireData = module.GetComponent<FireData>();
                         if (fireData != null && GUILayout.Button("Export FireData Projectile JSON"))
                         {
-                            string path = "_Export/BlockJson";
+                            string path = Path.Combine(TTSteamDir, "_Export/BlockJson");
                             bool nothing = true;
                             log = "Exported ";
                             if (fireData.m_BulletPrefab != null)
