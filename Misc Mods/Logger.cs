@@ -82,12 +82,12 @@ namespace Misc_Mods
                 {
                     LogLevel loggingLevel = (LogLevel)Enum.Parse(typeof(LogLevel), loggingLevelStr, true);
                     this.minLoggingLevel = (byte)loggingLevel;
-                    if (minLoggingLevel < (byte)LogLevel.DEBUG)
+                    if (minLoggingLevel <= (byte)LogLevel.DEBUG)
                     {
                         Console.WriteLine($"[{loggerID}] Logging {loggingLevel} and up");
                     }
                 }
-                else if (minLoggingLevel < (byte)LogLevel.DEBUG)
+                else if (minLoggingLevel <= (byte)LogLevel.DEBUG)
                 {
                     Console.WriteLine($"[{loggerID}] No log level found. Defaulting to {this.minLoggingLevel}");
                 }
