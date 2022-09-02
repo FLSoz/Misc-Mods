@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Reflection;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
@@ -139,7 +140,7 @@ namespace Misc_Mods
 
             DUMP.Add("data_blocks", DATA); // Add DATA array to DUMPwww
 
-            System.IO.File.WriteAllText("_Export/BlockInfoDump.json", DUMP.ToString(Newtonsoft.Json.Formatting.Indented));
+            System.IO.File.WriteAllText(Path.Combine(GUIConfig.TTSteamDir, "_Export/BlockInfoDump.json"), DUMP.ToString(Newtonsoft.Json.Formatting.Indented));
             return NumExported;
         }
 

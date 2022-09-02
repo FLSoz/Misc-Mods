@@ -39,6 +39,8 @@ namespace Misc_Mods
 
             new GameObject().AddComponent<GUIConfig>();
             GUIConfig.ResetMultipliers();
+
+            ArbitraryGODumper.ConfigureLogger();
         }
 
         internal static void ApplyPatches()

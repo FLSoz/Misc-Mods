@@ -3,7 +3,7 @@ using UnityEngine;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
-
+using Newtonsoft.Json.Linq;
 
 namespace Misc_Mods
 {
@@ -87,7 +87,7 @@ namespace Misc_Mods
         public static string log = "";
 
         const string regex = @"^[\w\-. ]+$";
-        static string SafeName(string source)
+        internal static string SafeName(string source)
         {
             string result = source;
             foreach (char c in System.IO.Path.GetInvalidFileNameChars())
@@ -334,7 +334,25 @@ namespace Misc_Mods
                         string path = Path.Combine(TTSteamDir, "_Export", module.type.ToString() + "Json");
                         BlockInfoDumper.DeepDumpClassCache.Clear();
                         BlockInfoDumper.CachedTransforms.Clear();
-                        var Total = BlockInfoDumper.DeepDumpAll(module.transform, 6).ToString();
+                        ArbitraryGODumper dumper = new ArbitraryGODumper(module.gameObject);
+                        string Total = dumper.Dump();
+                        if (!System.IO.Directory.Exists(path))
+                        {
+                            System.IO.Directory.CreateDirectory(path);
+                        }
+                        string safeName = SafeName(module.name);
+                        System.IO.File.WriteAllText(path + "/" + safeName + ".json", Total);
+                        log = "Exported " + safeName + ".json to " + path;
+                    }
+                    if (GUILayout.Button("Export DETAILED " + module.type.ToString() + " JSON"))
+                    {
+                        string path = Path.Combine(TTSteamDir, "_Export", module.type.ToString() + "Json");
+                        BlockInfoDumper.DeepDumpClassCache.Clear();
+                        BlockInfoDumper.CachedTransforms.Clear();
+                        ArbitraryGODumper dumper = new ArbitraryGODumper(module.gameObject);
+                        dumper.showTypeInformation = true;
+                        dumper.DumpExternal = true;
+                        string Total = dumper.Dump();
                         if (!System.IO.Directory.Exists(path))
                         {
                             System.IO.Directory.CreateDirectory(path);
@@ -345,12 +363,30 @@ namespace Misc_Mods
                     }
                     if (module.type == ObjectTypes.Block)
                     {
-                        if (GUILayout.Button("Export Prefab JSON"))
+                        if (GUILayout.Button("Export Block Prefab JSON"))
                         {
                             string path = Path.Combine(TTSteamDir, "_Export/BlockJson");
                             BlockInfoDumper.DeepDumpClassCache.Clear();
                             BlockInfoDumper.CachedTransforms.Clear();
-                            var Total = BlockInfoDumper.DeepDumpAll(ManSpawn.inst.GetBlockPrefab((BlockTypes)module.ItemType).transform, 6).ToString();
+                            ArbitraryGODumper dumper = new ArbitraryGODumper(ManSpawn.inst.GetBlockPrefab((BlockTypes)module.ItemType).gameObject);
+                            string Total = dumper.Dump();
+                            if (!System.IO.Directory.Exists(path))
+                            {
+                                System.IO.Directory.CreateDirectory(path);
+                            }
+                            string safeName = SafeName(module.name);
+                            System.IO.File.WriteAllText(path + "/" + safeName + "_prefab.json", Total);
+                            log = "Exported " + safeName + "prefab_.json to " + path;
+                        }
+                        if (GUILayout.Button("Export DETAILED Block Prefab JSON"))
+                        {
+                            string path = Path.Combine(TTSteamDir, "_Export/BlockJson");
+                            BlockInfoDumper.DeepDumpClassCache.Clear();
+                            BlockInfoDumper.CachedTransforms.Clear();
+                            ArbitraryGODumper dumper = new ArbitraryGODumper(ManSpawn.inst.GetBlockPrefab((BlockTypes)module.ItemType).gameObject);
+                            dumper.DumpExternal = true;
+                            dumper.showTypeInformation = true;
+                            string Total = dumper.Dump();
                             if (!System.IO.Directory.Exists(path))
                             {
                                 System.IO.Directory.CreateDirectory(path);
@@ -371,7 +407,9 @@ namespace Misc_Mods
                                 nothing = false;
                                 BlockInfoDumper.DeepDumpClassCache.Clear();
                                 BlockInfoDumper.CachedTransforms.Clear();
-                                var Total = BlockInfoDumper.DeepDumpAll(fireData.m_BulletPrefab.transform, 12).ToString();
+                                ArbitraryGODumper dumper = new ArbitraryGODumper(fireData.m_BulletPrefab.gameObject);
+                                dumper.showTypeInformation = true;
+                                string Total = dumper.Dump();
                                 if (!System.IO.Directory.Exists(path))
                                 {
                                     System.IO.Directory.CreateDirectory(path);
@@ -387,7 +425,9 @@ namespace Misc_Mods
                                 nothing = false;
                                 BlockInfoDumper.DeepDumpClassCache.Clear();
                                 BlockInfoDumper.CachedTransforms.Clear();
-                                var Total = BlockInfoDumper.DeepDumpAll(fireData.m_BulletCasingPrefab.transform, 12).ToString();
+                                ArbitraryGODumper dumper = new ArbitraryGODumper(fireData.m_BulletCasingPrefab.gameObject);
+                                dumper.showTypeInformation = true;
+                                string Total = dumper.Dump();
                                 if (!System.IO.Directory.Exists(path))
                                 {
                                     System.IO.Directory.CreateDirectory(path);
@@ -400,6 +440,41 @@ namespace Misc_Mods
                                 log += "nothing";
 
                             log += " to " + path;
+                        }
+                    }
+
+                    Tank player = Singleton.playerTank;
+                    if (player != null)
+                    {
+                        if (GUILayout.Button("Export Player Tank JSON"))
+                        {
+                            string path = Path.Combine(TTSteamDir, "_Export");
+                            BlockInfoDumper.DeepDumpClassCache.Clear();
+                            BlockInfoDumper.CachedTransforms.Clear();
+                            ArbitraryGODumper dumper = new ArbitraryGODumper(player.gameObject);
+                            string Total = dumper.Dump();
+                            if (!System.IO.Directory.Exists(path))
+                            {
+                                System.IO.Directory.CreateDirectory(path);
+                            }
+                            System.IO.File.WriteAllText(path + "/PlayerTank.json", Total);
+                            log = "Exported PlayerTank.json to " + path;
+                        }
+                        if (GUILayout.Button("Export DETAILED Player Tank JSON"))
+                        {
+                            string path = Path.Combine(TTSteamDir, "_Export");
+                            BlockInfoDumper.DeepDumpClassCache.Clear();
+                            BlockInfoDumper.CachedTransforms.Clear();
+                            ArbitraryGODumper dumper = new ArbitraryGODumper(player.gameObject);
+                            dumper.DumpExternal = true;
+                            dumper.showTypeInformation = true;
+                            string Total = dumper.Dump();
+                            if (!System.IO.Directory.Exists(path))
+                            {
+                                System.IO.Directory.CreateDirectory(path);
+                            }
+                            System.IO.File.WriteAllText(path + "/PlayerTank.json", Total);
+                            log = "Exported PlayerTank.json to " + path;
                         }
                     }
                 }

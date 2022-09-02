@@ -35,7 +35,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="0Harmony">
-      <HintPath>..\..\..\..\Steam\steamapps\common\TerraTech\TerraTechWin64_Data\Managed\0Harmony.dll</HintPath>
+      <HintPath>..\..\..\Unity\Projects\TT Modding\Assets\Mods\0ModManager\0Harmony.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Assembly-CSharp">
@@ -85,6 +85,10 @@
       <HintPath>..\..\..\..\Steam\steamapps\common\TerraTech\TerraTechWin64_Data\Managed\UnityEngine.PhysicsModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>..\..\..\..\Steam\steamapps\common\TerraTech\TerraTechWin64_Data\Managed\UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="UnityEngine.UI">
       <HintPath>..\..\..\..\Steam\steamapps\common\TerraTech\TerraTechWin64_Data\Managed\UnityEngine.UI.dll</HintPath>
       <Private>False</Private>
@@ -97,7 +101,9 @@
   <ItemGroup>
     <Compile Include="BlockInfoDumper.cs" />
     <Compile Include="Class1.cs" />
+    <Compile Include="ArbitraryGODumper.cs" />
     <Compile Include="GUIConfig.cs" />
+    <Compile Include="Logger.cs" />
     <Compile Include="MiscMods.cs" />
     <Compile Include="ObjExporter.cs" />
     <Compile Include="ObjGrabItExporter.cs" />
@@ -113,6 +119,7 @@
     <ProjectReference Include="..\..\ConfigHelper\ConfigHelper.csproj">
       <Project>{f4501c98-fb8c-4305-ba8e-eadcf0db86a3}</Project>
       <Name>ConfigHelper</Name>
+      <Private>False</Private>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

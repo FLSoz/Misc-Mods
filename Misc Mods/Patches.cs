@@ -1,14 +1,61 @@
 ﻿using System;
+using System.IO;
 using System.Reflection;
 using System.Collections.Generic;
 using System.Reflection.Emit;
 using HarmonyLib;
 using UnityEngine;
+using UnityEngine.UI;
+using Newtonsoft.Json.Linq;
 
 namespace Misc_Mods
 {
     internal class Patches
     {
+        // [HarmonyPatch(typeof(UILoadingScreenModProgress), "Update")]
+        private static class DumpLoadingScreen
+        {
+            private static bool dumped = false;
+
+            private static void DumpPNG(string path, Sprite sprite)
+            {
+                Texture2D tex = new Texture2D((int)sprite.rect.width, (int)sprite.rect.height);
+                Graphics.CopyTexture(sprite.texture, tex);
+                // tex.Apply();
+                File.WriteAllBytes(path, tex.EncodeToPNG());
+            }
+
+            // [HarmonyPrefix]
+            public static void Prefix(UILoadingScreenModProgress __instance)
+            {
+                if (!dumped)
+                {
+                    dumped = true;
+
+                    string path = Path.Combine(GUIConfig.TTSteamDir, "_Export/UI");
+                    /* ArbitraryGODumper dumper = new ArbitraryGODumper(__instance.loadingBar);
+                    // dumper.DumpExternal = true;
+                    // dumper.showTypeInformation = true;
+                    string Total = dumper.Dump();
+                    if (!System.IO.Directory.Exists(path))
+                    {
+                        System.IO.Directory.CreateDirectory(path);
+                    }
+                    string safeName = GUIConfig.SafeName("UILoadingScreenModProgress");
+                    System.IO.File.WriteAllText(path + "/" + safeName + ".json", Total); */
+
+                    Transform Background = __instance.loadingBar.transform.GetChild(1);
+                    Transform Fill = Background.GetChild(0);
+                    Image background = Background.GetComponent<Image>();
+                    Image fill = Fill.GetComponent<Image>();
+                    Texture2D fillTexture = (Texture2D) fill.sprite.texture;
+                    Texture2D backgroundTexture = (Texture2D) background.sprite.texture;
+                    DumpPNG(Path.Combine(path, "background.png"), background.sprite);
+                    DumpPNG(Path.Combine(path, "fill.png"), fill.sprite);
+                }
+            }
+        }
+
         [HarmonyPatch(typeof(Tank), "OnSpawn")]
         private static class Tank_OnSpawn
         {
@@ -19,7 +66,7 @@ namespace Misc_Mods
             }
         }
 
-        [HarmonyPatch(typeof(FanJet), "FixedUpdate")]
+        [HarmonyPatch(typeof(FanJet), "OnFixedUpdate")]
         private static class FanJet_FixedUpdate
         {
             public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
@@ -33,7 +80,7 @@ namespace Misc_Mods
             }
         }
 
-        [HarmonyPatch(typeof(BoosterJet), "FixedUpdate")]
+        [HarmonyPatch(typeof(BoosterJet), "OnFixedUpdate")]
         private static class BoosterJet_FixedUpdate
         {
             public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
@@ -45,7 +92,7 @@ namespace Misc_Mods
             }
         }
 
-        [HarmonyPatch(typeof(ModuleWing), "FixedUpdate")]
+        [HarmonyPatch(typeof(ModuleWing), "OnFixedUpdate")]
         private static class ModuleWing_FixedUpdate
         {
             public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)

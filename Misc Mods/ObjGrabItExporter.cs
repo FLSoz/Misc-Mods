@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using System.IO;
 using UnityEngine;
 using WhisperingGibbon.GrabIt;
 
@@ -70,7 +71,7 @@ namespace Misc_Mods
                 }
             }
 
-            string path = "_Export/Techs";
+            string path = Path.Combine(GUIConfig.TTSteamDir, "_Export/Techs");
 
             if (!System.IO.Directory.Exists(path))
             {
