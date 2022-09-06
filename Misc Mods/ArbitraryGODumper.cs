@@ -553,6 +553,17 @@ namespace Misc_Mods
                     return null;
                 }
             }
+            else if (objectToDump is TankBlock tankBlock)
+            {
+                JObject tankObj = new JObject();
+                DumpTankBlock(tankObj, tankBlock, currentPath);
+                return tankObj;
+            }
+            else if (objectToDump is Visible visible)
+            {
+                string visibleName = visible != null ? visible.name : "#NULL";
+                return $"<VISIBLE {visibleName}>";
+            }
             else if (objectToDump is Component component)
             {
                 if (ComponentMap.TryGetValue(component, out ComponentRef targetComponentRef))
@@ -728,10 +739,11 @@ namespace Misc_Mods
                     }
 
                     Type[] interfaces = objectType.GetInterfaces();
-                    bool isGenericCollection = interfaces.Any(i => i.IsGenericType && typeof(ICollection<>).IsAssignableFrom(i.GetGenericTypeDefinition()));
+                    bool isGenericCollection = interfaces.Any(i => i.IsGenericType && typeof(IEnumerable<>).IsAssignableFrom(i.GetGenericTypeDefinition()));
                     bool isGenericDictionary = interfaces.Any(i => i.IsGenericType && typeof(IDictionary<,>).IsAssignableFrom(i.GetGenericTypeDefinition()));
-                    bool isCollection = interfaces.Any(i => i is ICollection);
+                    bool isCollection = interfaces.Any(i => i is IEnumerable);
                     bool isDictionary = interfaces.Any(i => i is IDictionary);
+                    bool isArray = objectType.IsArray;
 
                     if (isGenericDictionary)
                     {
@@ -780,67 +792,87 @@ namespace Misc_Mods
                     }
                     else
                     {
-                        logger.Trace("TRYING TO DUMP OBJECT");
-                        BindingFlags correctFlags = objectToDump is UnityEngine.Object ? PublicInstanceFlags : InstanceFlags;
+                        logger.Trace($"TRYING TO DUMP OBJECT OF TYPE {objectType}");
+                        bool relevant = objectType.Assembly.FullName.Contains("Assembly-CSharp");
+                        BindingFlags correctFlags = objectToDump is UnityEngine.Object || !relevant ? PublicInstanceFlags : InstanceFlags;
+                        if (PublicOnly.Contains(objectType))
+                        {
+                            correctFlags = PublicInstanceFlags;
+                        }
 
                         JObject classObj = new JObject();
                         if (showTypeInformation)
                         {
                             classObj.Add("<AGOD>__ActualType", objectType.FullName);
                         }
-                        FieldInfo[] fields = objectType.GetFields(correctFlags);
-                        foreach (FieldInfo field in fields)
+                        if (relevant || objectToDump is UnityEngine.Object)
                         {
-                            string typeDetail = showTypeInformation ? $"({field.FieldType}) " : "";
-                            string fieldName = $"{typeDetail}{field.Name}";
+                            FieldInfo[] fields = objectType.GetFields(correctFlags);
+                            foreach (FieldInfo field in fields)
+                            {
+                                string typeDetail = showTypeInformation ? $"({field.FieldType}) " : "";
+                                string fieldName = $"{typeDetail}{field.Name}";
+                                try
+                                {
+                                    object value = field.GetValue(objectToDump);
+                                    JToken outputToken = field.FieldType != objectType ? DumpArbitraryObject_Internal(classObj, fieldName, $"{currentPath}->{field.Name}", value) : value?.ToString();
+                                    classObj.Add(fieldName, outputToken);
+                                }
+                                catch (Exception e)
+                                {
+                                    logger.Error($"FAILED to write field {field.Name}");
+                                    logger.Error(e);
+                                    classObj.Add(jPropertyName, "<ERROR>");
+                                }
+                            }
+                            PropertyInfo[] properties = objectType.GetProperties(correctFlags);
+                            foreach (PropertyInfo property in properties)
+                            {
+                                MethodInfo getMethod = property.GetGetMethod(true);
+                                MethodInfo setMethod = property.GetSetMethod(true);
+                                bool isReadonly = setMethod == null;
+                                try
+                                {
+                                    if (getMethod == null)
+                                    {
+                                        logger.Trace($"DETECTED WRITE-ONLY PROPERTY");
+                                    }
+                                    else
+                                    {
+                                        object value = getMethod.Invoke(objectToDump, null);
+                                        string typeDetail = showTypeInformation ? $"({property.PropertyType}) " : "";
+                                        string propertyName = $"{typeDetail}{property.Name}" + (isReadonly ? " (readonly)" : "");
+                                        JToken outputToken = property.PropertyType != objectType ? DumpArbitraryObject_Internal(classObj, propertyName, $"{currentPath}=>{property.Name}", value) : value?.ToString();
+                                        classObj.Add(propertyName, outputToken);
+                                    }
+                                }
+                                catch (Exception e)
+                                {
+                                    logger.Error($"FAILED to write property {property.Name}");
+                                    logger.Error(e);
+                                    classObj.Add(jPropertyName, "<ERROR>");
+                                }
+                            }
+                            if (objectToDump is UnityEngine.Object unityObject)
+                            {
+                                classObj.Add("InstanceId", unityObject.GetInstanceID());
+                                if (unityObject is Material material)
+                                {
+                                    string[] propertyNames = material.GetTexturePropertyNames();
+                                    classObj.Add("ShaderProperties", new JArray(propertyNames));
+                                    DumpMaterialProperties(classObj, material, propertyNames, currentPath);
+                                }
+                            }
+                        }
+                        else
+                        {
                             try
                             {
-                                object value = field.GetValue(objectToDump);
-                                JToken outputToken = field.FieldType != objectType ? DumpArbitraryObject_Internal(classObj, fieldName, $"{currentPath}->{field.Name}", value) : value?.ToString();
-                                classObj.Add(fieldName, outputToken);
+                                classObj.Add("toString", objectToDump.ToString());
                             }
                             catch (Exception e)
                             {
-                                logger.Error($"FAILED to write field {field.Name}");
-                                logger.Error(e);
-                                classObj.Add(jPropertyName, "<ERROR>");
-                            }
-                        }
-                        PropertyInfo[] properties = objectType.GetProperties(correctFlags);
-                        foreach (PropertyInfo property in properties)
-                        {
-                            MethodInfo getMethod = property.GetGetMethod(true);
-                            MethodInfo setMethod = property.GetSetMethod(true);
-                            bool isReadonly = setMethod == null;
-                            try
-                            {
-                                if (getMethod == null)
-                                {
-                                    logger.Trace($"DETECTED WRITE-ONLY PROPERTY");
-                                }
-                                else
-                                {
-                                    object value = getMethod.Invoke(objectToDump, null);
-                                    string typeDetail = showTypeInformation ? $"({property.PropertyType}) " : "";
-                                    string propertyName = $"{typeDetail}{property.Name}" + (isReadonly ? " (readonly)" : "");
-                                    JToken outputToken = property.PropertyType != objectType ? DumpArbitraryObject_Internal(classObj, propertyName, $"{currentPath}=>{property.Name}", value) : value?.ToString();
-                                    classObj.Add(propertyName, outputToken);
-                                }
-                            }
-                            catch (Exception e)
-                            {
-                                logger.Error($"FAILED to write property {property.Name}");
-                                logger.Error(e);
-                                classObj.Add(jPropertyName, "<ERROR>");
-                            }
-                        }
-                        if (objectToDump is UnityEngine.Object unityObject) {
-                            classObj.Add("InstanceId", unityObject.GetInstanceID());
-                            if (unityObject is Material material)
-                            {
-                                string[] propertyNames = material.GetTexturePropertyNames();
-                                classObj.Add("ShaderProperties", new JArray(propertyNames));
-                                DumpMaterialProperties(classObj, material, propertyNames, currentPath);
+                                classObj.Add("toString ERROR", e.ToString());
                             }
                         }
                         logger.Trace("OBJECT DUMP COMPLETE");
@@ -1006,22 +1038,29 @@ namespace Misc_Mods
             tankBlockObj.Add("filledCells", DumpArbitraryObject_Internal(tankBlockObj, "filledCells", $"{currentPath}->filledCells", tankBlock.filledCells));
             tankBlockObj.Add("CentreOfMass", DumpArbitraryObject_Internal(tankBlockObj, "CentreOfMass", $"{currentPath}=>CentreOfMass", tankBlock.CentreOfMass));
             tankBlockObj.Add("CentreOfGravity", DumpArbitraryObject_Internal(tankBlockObj, "CentreOfGravity", $"{currentPath}=>CentreOfGravity", tankBlock.CentreOfGravity));
-            tankBlockObj.Add("centreOfMassWorld", DumpArbitraryObject_Internal(tankBlockObj, "centreOfMassWorld", $"{currentPath}=>centreOfMassWorld", tankBlock.centreOfMassWorld));
+            if (tankBlock.trans != null)
+            {
+                tankBlockObj.Add("centreOfMassWorld", DumpArbitraryObject_Internal(tankBlockObj, "centreOfMassWorld", $"{currentPath}=>centreOfMassWorld", tankBlock.centreOfMassWorld));
+            }
             tankBlockObj.Add("cachedLocalPosition", DumpArbitraryObject_Internal(tankBlockObj, "cachedLocalPositation", $"{currentPath}=>cachedLocalPosition", tankBlock.cachedLocalPosition));
             tankBlockObj.Add("cachedLocalRotation", DumpArbitraryObject_Internal(tankBlockObj, "cachedLocalRotationn", $"{currentPath}=>cachedLocalRotation", tankBlock.cachedLocalRotation));
             tankBlockObj.Add("BlockCellBounds", DumpArbitraryObject_Internal(tankBlockObj, "BlockCellBounds", $"{currentPath}=>BlockCellBounds", tankBlock.BlockCellBounds));
             return;
         }
 
+        private static Type[] PublicOnly = new Type[] { typeof(BlockManager) };
+
         private void DumpComponent(ComponentRef componentRef)
         {
+            Type componentType = componentRef.type;
+            logger.Trace($"TRYING TO DUMP COMPONENT OF TYPE {componentType.FullName} on GO {componentRef.component?.gameObject}");
             // don't fully dump TankBlocks
             if (componentRef.component is TankBlock tankBlock)
             {
                 DumpTankBlock(componentRef.jObj, tankBlock, componentRef.GetReferenceString());
                 return;
             }
-            BindingFlags correctFlags = componentRef.component is Module ? InstanceFlags : PublicInstanceFlags;
+            BindingFlags correctFlags = (componentRef.component is Module || componentType.Assembly.FullName.Contains("Assembly-CSharp")) && !PublicOnly.Contains(componentRef.type) ? InstanceFlags : PublicInstanceFlags;
             JObject componentObj = componentRef.jObj;
             FieldInfo[] fields = componentRef.type.GetFields(correctFlags);
             foreach(FieldInfo field in fields)
@@ -1084,6 +1123,7 @@ namespace Misc_Mods
                     componentObj.Add(jPropertyName, "<ERROR>");
                 }
             }
+            logger.Trace($"COMPONENT DUMP COMPLETE FOR {componentType.FullName} on GO {componentRef.component?.gameObject}");
         }
 
         private void SetTargetRef(MissingTargetRef targetRef, string targetValue)
