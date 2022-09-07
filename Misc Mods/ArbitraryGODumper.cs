@@ -699,6 +699,22 @@ namespace Misc_Mods
                 MethodInfo delegateMethod = delegateInstance.GetMethodInfo();
                 return $"{{Delegate ({string.Join(",", delegateMethod.GetParameters().Select((ParameterInfo param) => param.ParameterType))}) => {delegateMethod.ReturnType}}}";
             }
+            else if (objectToDump is FieldInfo fieldInfo)
+            {
+                return $"<FIELD {fieldInfo.FieldType} {fieldInfo.Name}>";
+            }
+            else if (objectToDump is PropertyInfo propertyInfo)
+            {
+                return $"<FIELD {propertyInfo.PropertyType} {propertyInfo.Name}>";
+            }
+            else if (objectToDump is MethodInfo methodInfo)
+            {
+                ParameterInfo[] parameters = methodInfo.GetParameters();
+                string parameterString = parameters != null ? String.Join(" ", parameters.Select(parameter => parameter.ParameterType.FullName)) : "";
+                Type returnType = methodInfo.ReturnType;
+                string returnString = returnType != null ? returnType.FullName : "void";
+                return $"<METHOD {methodInfo.Name} ({parameterString}) => {returnString}>";
+            }
             /* else if (objectToDump is Visible visible)
             {
             } */
