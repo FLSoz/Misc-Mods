@@ -8,6 +8,13 @@ namespace Misc_Mods
 {
     public class MiscMods : ModBase
     {
+        internal static Logger logger;
+
+        internal static void ConfigureLogger()
+        {
+            logger = new Logger("MiscMods");
+        }
+
         public override void DeInit()
         {
             Class1.harmony.UnpatchAll(Class1.HarmonyID);
@@ -23,9 +30,15 @@ namespace Misc_Mods
             return true;
         }
 
+        bool Inited = false;
         public override void EarlyInit()
         {
-            Class1.SetupAssets();
+            if (!Inited)
+            {
+                Class1.SetupAssets();
+                ConfigureLogger();
+                Inited = true;
+            }
         }
     }
 }

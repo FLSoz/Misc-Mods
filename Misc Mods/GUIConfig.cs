@@ -4,6 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
+using System.Text;
+using System.Reflection;
+using HarmonyLib;
 
 namespace Misc_Mods
 {
@@ -319,13 +322,99 @@ namespace Misc_Mods
             return false;
         }
 
+        private static readonly FieldInfo m_CurrentSession = AccessTools.Field(typeof(ManMods), "m_CurrentSession");
+
         private void BlockInfoDumperPage(int ID)
         {
             try
             {
+                if (GUILayout.Button("Export all Localisation"))
+                {
+                    string path = Path.Combine(TTSteamDir, "_Export/Localisation");
+                    if (!System.IO.Directory.Exists(path))
+                        System.IO.Directory.CreateDirectory(path);
+
+                    Localisation loc = Singleton.Manager<Localisation>.inst;
+                    string[] bankNames = Enum.GetNames(typeof(LocalisationEnums.StringBanks));
+
+                    int count = 0;
+                    StringBuilder masterDump = new StringBuilder();
+                    foreach (string bankName in bankNames) {
+                        Type bankType = typeof(LocalisationEnums).GetNestedType(bankName);
+                        if (bankType != null)
+                        {
+                            StringBuilder bankDump = new StringBuilder();
+                            string[] locNames = Enum.GetNames(bankType);
+                            foreach (string locName in locNames)
+                            {
+                                object locEnum = Enum.Parse(bankType, locName);
+                                string locText = loc.GetLocalisedString((LocalisationEnums.StringBanks) Enum.Parse(typeof(LocalisationEnums.StringBanks), bankName), (int) locEnum, Array.Empty<Localisation.GlyphInfo>());
+                                bankDump.AppendLine($"{locName}: {locText}");
+                                masterDump.AppendLine($"{bankName}.{locName}: {locText}");
+                                count++;
+                            }
+                            System.IO.File.WriteAllText(path + "/" + bankName + ".txt", bankDump.ToString());
+                        }
+                    }
+
+                    System.IO.File.WriteAllText(path + "/_MasterBank.txt", masterDump.ToString());
+                    log = $"Exported {count} localisations in {bankNames.Length} string banks to " + path;
+                }
                 if (GUILayout.Button("Export BlockInfoDump.JSON"))
                 {
                     log = "Logged " + BlockInfoDumper.Dump().ToString() + " blocks to file";
+                }
+                if (GUILayout.Button("GigaBlockPrefabDump"))
+                {
+                    string path = Path.Combine(TTSteamDir, "_Export/BlockJson");
+                    foreach (BlockTypes vanillaID in Enum.GetValues(typeof(BlockTypes)))
+                    {
+                        TankBlock blockPrefab = Singleton.Manager<ManSpawn>.inst.GetBlockPrefab(vanillaID);
+                        if (blockPrefab != null)
+                        {
+                            MiscMods.logger.Trace($"Dumping block prefab for {vanillaID}");
+                            ArbitraryGODumper dumper = new ArbitraryGODumper(blockPrefab.gameObject);
+                            dumper.DumpExternal = true;
+                            string Total = dumper.Dump();
+                            if (!System.IO.Directory.Exists(path))
+                            {
+                                System.IO.Directory.CreateDirectory(path);
+                            }
+                            string safeName = SafeName(blockPrefab.name);
+                            System.IO.File.WriteAllText(path + "/" + safeName + "_prefab.json", Total);
+                            log = "Exported " + safeName + "prefab_.json to " + path;
+                        }
+                        else
+                        {
+                            MiscMods.logger.Warn($"FAILED to find prefab for block {vanillaID}");
+                        }
+                    }
+                    ModSessionInfo currentSession = (ModSessionInfo)m_CurrentSession.GetValue(Singleton.Manager<ManMods>.inst);
+                    foreach (int sessionID in currentSession.BlockIDs.Keys)
+                    {
+                        BlockTypes moddedID = (BlockTypes)sessionID;
+                        string moddedBlockID = currentSession.BlockIDs[sessionID];
+                        TankBlock blockPrefab = Singleton.Manager<ManSpawn>.inst.GetBlockPrefab(moddedID);
+                        if (blockPrefab != null)
+                        {
+                            MiscMods.logger.Trace($"Dumping block prefab for modded block {moddedBlockID}");
+                            ArbitraryGODumper dumper = new ArbitraryGODumper(blockPrefab.gameObject);
+                            dumper.DumpExternal = true;
+                            string Total = dumper.Dump();
+                            if (!System.IO.Directory.Exists(path))
+                            {
+                                System.IO.Directory.CreateDirectory(path);
+                            }
+                            string safeName = SafeName(blockPrefab.name);
+                            System.IO.File.WriteAllText(path + "/" + safeName + "_prefab.json", Total);
+                            log = "Exported " + safeName + "prefab_.json to " + path;
+                        }
+                        else
+                        {
+                            MiscMods.logger.Warn($"FAILED to find prefab for modded block {moddedBlockID}");
+                        }
+                    }
+                    log = "Dumped JSONs for all blocks";
                 }
                 if (module != null)
                 {
@@ -498,10 +587,6 @@ namespace Misc_Mods
 
                 GUILayout.Space(16);
 
-                TextSliderPair("Turbine Strength: ", ref fjm, ref Class1.FanJetMultiplier, 0f, 2f, false);
-                TextSliderPair("Turbine Velocity Limiter: ", ref fjr, ref Class1.FanJetVelocityRestraint, 0f, 25f, false, 1f);
-                TextSliderPair("Wing Strength: ", ref mwm, ref Class1.ModuleWingMultiplier, 0f, 2f, false);
-                TextSliderPair("Booster Strength: ", ref bjm, ref Class1.BoosterJetMultiplier, 0f, 2f, false);
                 if (TextSliderPair("Tech Drag: ", ref td, ref Class1.TechDrag, 0, 10f, false, 0.005f))
                 {
                     ResetTechDrag();

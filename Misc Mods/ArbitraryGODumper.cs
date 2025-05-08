@@ -18,8 +18,8 @@ namespace Misc_Mods
 {
     internal class ArbitraryGODumper
     {
-        internal static BindingFlags InstanceFlags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-        internal static BindingFlags PublicInstanceFlags = BindingFlags.Instance | BindingFlags.Public;
+        internal static BindingFlags InstanceFlags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy;
+        internal static BindingFlags PublicInstanceFlags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.FlattenHierarchy;
 
         internal static Logger logger;
 
@@ -120,8 +120,8 @@ namespace Misc_Mods
 
         private List<MissingTargetRef> externalRefs = new List<MissingTargetRef>();
         private HashSet<GameObject> missingGOs = new HashSet<GameObject>();
-        private HashSet<Component> components = new HashSet<Component>();
-        private HashSet<GameObject> gameObjects = new HashSet<GameObject>();
+        private HashSet<Component> componentsNeedDump = new HashSet<Component>();
+        private HashSet<GameObject> gameObjectsNeedDump = new HashSet<GameObject>();
 
         private JToken DumpTransform(GameObjectRef objectRef)
         {
@@ -178,7 +178,8 @@ namespace Misc_Mods
         {
             GameObject currentObject = objectRef.gameObject;
             objectRef.jObj.Add("activeSelf", currentObject.activeSelf);
-            gameObjects.Add(currentObject);
+            objectRef.jObj.Add("layer", currentObject.layer);
+            gameObjectsNeedDump.Add(currentObject);
             string spacing = new String(' ', depth * 4);
             logger.Trace($"{spacing}Going through children of {currentPath}/{currentObject.name}");
             Dictionary<string, int> nameCount = new Dictionary<string, int>();
@@ -520,7 +521,7 @@ namespace Misc_Mods
                     };
                     AddMissingGO(gameObject);
                     externalRefs.Add(targetRef);
-                    return null;
+                    return "<MISSING>";
                 }
             }
             else if (objectToDump is Tank tank)
@@ -550,7 +551,7 @@ namespace Misc_Mods
                     };
                     AddMissingGO(transform.gameObject);
                     externalRefs.Add(targetRef);
-                    return null;
+                    return "<MISSING>";
                 }
             }
             else if (objectToDump is TankBlock tankBlock)
@@ -581,7 +582,7 @@ namespace Misc_Mods
                     };
                     AddMissingGO(component.gameObject);
                     externalRefs.Add(targetRef);
-                    return null;
+                    return "<MISSING>";
                 }
             }
             else if (objectToDump is Vector2 vector2)
@@ -821,7 +822,7 @@ namespace Misc_Mods
                         {
                             classObj.Add("<AGOD>__ActualType", objectType.FullName);
                         }
-                        if (relevant || objectToDump is UnityEngine.Object)
+                        if (relevant || objectToDump is UnityEngine.Object || objectType.Assembly.FullName.Contains("UnityEngine"))
                         {
                             FieldInfo[] fields = objectType.GetFields(correctFlags);
                             foreach (FieldInfo field in fields)
@@ -1066,23 +1067,18 @@ namespace Misc_Mods
 
         private static Type[] PublicOnly = new Type[] { typeof(BlockManager) };
 
-        private void DumpComponent(ComponentRef componentRef)
+        private void DumpComponentType(Component component, string referenceString, Type componentType, JObject componentObj, BindingFlags bindingFlags)
         {
-            Type componentType = componentRef.type;
-            logger.Trace($"TRYING TO DUMP COMPONENT OF TYPE {componentType.FullName} on GO {componentRef.component?.gameObject}");
-            // don't fully dump TankBlocks
-            if (componentRef.component is TankBlock tankBlock)
+            string inheritanceDetail = "";
+            if (component.GetType() != componentType)
             {
-                DumpTankBlock(componentRef.jObj, tankBlock, componentRef.GetReferenceString());
-                return;
+                inheritanceDetail = $"[INHERITED] {componentType.Name}.";
             }
-            BindingFlags correctFlags = (componentRef.component is Module || componentType.Assembly.FullName.Contains("Assembly-CSharp")) && !PublicOnly.Contains(componentRef.type) ? InstanceFlags : PublicInstanceFlags;
-            JObject componentObj = componentRef.jObj;
-            FieldInfo[] fields = componentRef.type.GetFields(correctFlags);
-            foreach(FieldInfo field in fields)
+            FieldInfo[] fields = componentType.GetFields(bindingFlags);
+            foreach (FieldInfo field in fields)
             {
                 string typeDetail = showTypeInformation ? $"({field.FieldType}) " : "";
-                string jPropertyName = $"{typeDetail}{field.Name}";
+                string jPropertyName = $"{typeDetail}{inheritanceDetail}{field.Name}";
                 try
                 {
                     if (!DumpCachedProperties && field.Name.Contains("cached"))
@@ -1091,9 +1087,9 @@ namespace Misc_Mods
                     }
                     else
                     {
-                        object value = field.GetValue(componentRef.component);
-                        JToken outputToken = field.FieldType != componentRef.type ?
-                            DumpArbitraryObject_Internal(componentRef.jObj, jPropertyName, $"{componentRef.GetReferenceString()}->{field.Name}", value) :
+                        object value = field.GetValue(component);
+                        JToken outputToken = field.FieldType != componentType ?
+                            DumpArbitraryObject_Internal(componentObj, jPropertyName, $"{referenceString}->{field.Name}", value) :
                             value?.ToString();
                         componentObj.Add(jPropertyName, outputToken);
                     }
@@ -1105,14 +1101,14 @@ namespace Misc_Mods
                     componentObj.Add(jPropertyName, "<ERROR>");
                 }
             }
-            PropertyInfo[] properties = componentRef.type.GetProperties(correctFlags);
+            PropertyInfo[] properties = componentType.GetProperties(bindingFlags);
             foreach (PropertyInfo property in properties)
             {
                 string typeDetail = showTypeInformation ? $"({property.PropertyType}) " : "";
                 MethodInfo getMethod = property.GetGetMethod(true);
                 MethodInfo setMethod = property.GetSetMethod(true);
                 bool isReadonly = setMethod == null;
-                string jPropertyName = $"{typeDetail}{property.Name}" + (isReadonly ? " (readonly)" : "");
+                string jPropertyName = $"{typeDetail}{inheritanceDetail}{property.Name}" + (isReadonly ? " (readonly)" : "");
                 try
                 {
                     if (getMethod == null)
@@ -1125,9 +1121,9 @@ namespace Misc_Mods
                     }
                     else
                     {
-                        object value = getMethod.Invoke(componentRef.component, null);
-                        JToken outputToken = property.PropertyType != componentRef.type ?
-                            DumpArbitraryObject_Internal(componentRef.jObj, jPropertyName, $"{componentRef.GetReferenceString()}=>{property.Name}", value) :
+                        object value = getMethod.Invoke(component, null);
+                        JToken outputToken = property.PropertyType != componentType ?
+                            DumpArbitraryObject_Internal(componentObj, jPropertyName, $"{referenceString}=>{property.Name}", value) :
                             value?.ToString();
                         componentObj.Add(jPropertyName, outputToken);
                     }
@@ -1139,6 +1135,27 @@ namespace Misc_Mods
                     componentObj.Add(jPropertyName, "<ERROR>");
                 }
             }
+
+            Type parentType = componentType.BaseType;
+            if (parentType != null && parentType != typeof(MonoBehaviour) && parentType != typeof(Component) && parentType != typeof(ScriptableObject))
+            {
+                DumpComponentType(component, referenceString, parentType, componentObj, bindingFlags);
+            }
+        }
+
+        private void DumpComponent(ComponentRef componentRef)
+        {
+            Type componentType = componentRef.type;
+            logger.Trace($"TRYING TO DUMP COMPONENT OF TYPE {componentType.FullName} on GO {componentRef.component?.gameObject}");
+            // don't fully dump TankBlocks
+            if (componentRef.component is TankBlock tankBlock)
+            {
+                DumpTankBlock(componentRef.jObj, tankBlock, componentRef.GetReferenceString());
+                return;
+            }
+            BindingFlags correctFlags = (componentRef.component is Module || componentType.Assembly.FullName.Contains("Assembly-CSharp")) && !PublicOnly.Contains(componentRef.type) ? InstanceFlags : PublicInstanceFlags;
+            JObject componentObj = componentRef.jObj;
+            DumpComponentType(componentRef.component, componentRef.GetReferenceString(), componentType, componentObj, correctFlags);
             logger.Trace($"COMPONENT DUMP COMPLETE FOR {componentType.FullName} on GO {componentRef.component?.gameObject}");
         }
 
@@ -1159,7 +1176,7 @@ namespace Misc_Mods
 
         private void SetupComponentStructure()
         {
-            foreach (GameObject gameObject in gameObjects)
+            foreach (GameObject gameObject in gameObjectsNeedDump)
             {
                 GameObjectRef objectRef = GameObjectMap[gameObject];
 
@@ -1184,7 +1201,7 @@ namespace Misc_Mods
                 Dictionary<string, int> currIndCount = new Dictionary<string, int>();
                 foreach (Component component in objectComponents)
                 {
-                    components.Add(component);
+                    componentsNeedDump.Add(component);
                     string name = component.GetType().FullName;
                     int totalCount = nameCount[name];
                     int index = -1;
@@ -1210,7 +1227,7 @@ namespace Misc_Mods
 
         private void DumpComponentDetails()
         {
-            foreach (Component component in components)
+            foreach (Component component in componentsNeedDump)
             {
                 ComponentRef componentRef = ComponentMap[component];
                 DumpComponent(componentRef);
@@ -1239,56 +1256,58 @@ namespace Misc_Mods
 
                 // Setup the component structure
                 SetupComponentStructure();
-                gameObjects.Clear();
+                gameObjectsNeedDump.Clear();
 
                 // Dump components, determine islands
                 DumpComponentDetails();
-                components.Clear();
+                componentsNeedDump.Clear();
 
                 if (DumpExternal)
                 {
                     // Fillup graph
                     JObject external = new JObject();
                     int i = 0;
-                    HashSet<GameObject> missingObjects = new HashSet<GameObject>(missingGOs);
-                    missingGOs.Clear();
-
                     string playerTankPropName = null;
-                    GameObjectRef playerTankRef;
-                    foreach (GameObject island in missingObjects)
+                    while (missingGOs.Count > 0)
                     {
-                        GameObjectRef islandRef = new GameObjectRef
+                        GameObject[] frontier = missingGOs.ToArray();
+                        missingGOs.Clear();
+                        GameObjectRef playerTankRef;
+                        foreach (GameObject island in frontier)
                         {
-                            gameObject = island,
-                            path = "EXT:",
-                            index = -1,
-                            jObj = new JObject()
-                        };
-                        GameObjectMap.Add(island, islandRef);
+                            GameObjectRef islandRef = new GameObjectRef
+                            {
+                                gameObject = island,
+                                path = "EXT:",
+                                index = -1,
+                                jObj = new JObject()
+                            };
+                            GameObjectMap.Add(island, islandRef);
 
-                        string islandName = $"External_GameObject_{i}|{island.name}";
-                        string path = "EXT:";
-                        if (island.GetComponent<Tank>() == Singleton.playerTank)
-                        {
-                            playerTankRef = islandRef;
-                            playerTankPropName = islandName;
-                            path = "EXT (PLAYER TANK):";
+                            string islandName = $"External_GameObject_{i}|{island.name}";
+                            string path = "EXT:";
+                            if (island.GetComponent<Tank>() == Singleton.playerTank)
+                            {
+                                playerTankRef = islandRef;
+                                playerTankPropName = islandName;
+                                path = "EXT (PLAYER TANK):";
+                            }
+
+                            DumpGameObjectRecursive(islandRef, path, 0);
+                            external.Add(islandName, islandRef.jObj);
+                            i++;
                         }
 
-                        DumpGameObjectRecursive(islandRef, path, 0);
-                        external.Add(islandName, islandRef.jObj);
-                        i++;
+                        // Dump the rest of the stuff
+                        // Setup the component structure
+                        SetupComponentStructure();
+                        gameObjectsNeedDump.Clear();
+
+                        // Dump components, determine islands
+                        DumpComponentDetails();
+                        componentsNeedDump.Clear();
                     }
                     actualOutput.Add("EXTERNAL", external);
-
-                    // Dump the rest of the stuff
-                    // Setup the component structure
-                    SetupComponentStructure();
-                    gameObjects.Clear();
-
-                    // Dump components, determine islands
-                    DumpComponentDetails();
-                    components.Clear();
 
                     // Remove tank from externaloutput, but keep references to it (with modified name)
                     if (playerTankPropName != null)
@@ -1299,7 +1318,6 @@ namespace Misc_Mods
                     // Fixup references
                     foreach (MissingTargetRef missingTarget in externalRefs)
                     {
-                        JToken source = missingTarget.source;
                         object target = missingTarget.missingTarget;
 
                         string targetValue = "<MISSING>";
@@ -1338,16 +1356,16 @@ namespace Misc_Mods
             GameObjectMap.Clear();
             externalRefs.Clear();
             missingGOs.Clear();
-            components.Clear();
-            gameObjects.Clear();
+            componentsNeedDump.Clear();
+            gameObjectsNeedDump.Clear();
 
             UnityObjectMap = null;
             ComponentMap = null;
             GameObjectMap = null;
             externalRefs = null;
             missingGOs = null;
-            components = null;
-            gameObjects = null;
+            componentsNeedDump = null;
+            gameObjectsNeedDump = null;
             root = null;
         }
     }

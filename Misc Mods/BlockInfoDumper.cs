@@ -336,7 +336,10 @@ namespace Misc_Mods
             catch { }
         }
 
-        static FieldInfo m_Force = typeof(BoosterJet).GetField("m_Force", binding);
+        static FieldInfo m_Force = typeof(Thruster).GetField("m_Force", binding);
+        static FieldInfo m_BackForce = typeof(FanJet).GetField("backForce", binding);
+        static FieldInfo m_SpinDelta = typeof(FanJet).GetField("spinDelta", binding);
+        static FieldInfo m_SpinSpeed = typeof(FanJet).GetField("spinSpeed", binding);
         static FieldInfo m_FireRateFalloff = typeof(BoosterJet).GetField("m_FireRateFalloff", binding);
         static void GetBoosterData(JObject BLOCK, GameObject Base)
         {
@@ -348,29 +351,27 @@ namespace Misc_Mods
 
                     JObject DATA = new JObject
                     {
-                        { "uses_drive_controls", obj.UsesDriveControls },
+                        { "m_UseDriveControls", obj.UsesDriveControls },
+                        { "IsRotor", obj.IsRotor },
                     };
                     var jets = Base.GetComponentsInChildren<BoosterJet>(true);
-                    if (jets == null || jets.Length == 0)
-                    {
-                        var fans = Base.GetComponentsInChildren<FanJet>(true);
-                        if (fans == null || fans.Length == 0)
-                        {
-                            DATA.Add("is_rotor", obj.IsRotor);
-                            DATA.Add("fan_count", fans.Length);
-                            DATA.Add("force", (float)m_Force.GetValue(fans[0]));
-                            DATA.Add("spin_speed", fans[0].spinSpeed);
-                            DATA.Add("spin_delta", fans[0].spinDelta);
-                            DATA.Add("force", fans[0].force);
-                            DATA.Add("back_force", fans[0].backForce);
-                        }
-                    }
-                    else
+                    if (jets != null && jets.Length == 0)
                     {
                         DATA.Add("fuel_per_second", obj.FuelBurnPerSecond());
                         DATA.Add("jet_count", jets.Length);
-                        DATA.Add("force", (float)m_Force.GetValue(jets[0]));
+                        DATA.Add("m_Force", (float)m_Force.GetValue(jets[0]));
                         DATA.Add("falloff_rate", (float)m_FireRateFalloff.GetValue(jets[0]));
+                        
+                    }
+                    var fans = Base.GetComponentsInChildren<FanJet>(true);
+                    if (fans != null && fans.Length == 0)
+                    {
+                        DATA.Add("fan_count", fans.Length);
+                        DATA.Add("force", (float)m_Force.GetValue(fans[0]));
+                        DATA.Add("spinSpeed", (float)m_SpinSpeed.GetValue(fans[0]));
+                        DATA.Add("spinDelta", (float)m_SpinDelta.GetValue(fans[0]));
+                        DATA.Add("m_Force", (float)m_Force.GetValue(fans[0]));
+                        DATA.Add("backForce", (float)m_BackForce.GetValue(fans[0]));
                     }
                     BLOCK.Add("ModuleBooster", DATA);
                 }
